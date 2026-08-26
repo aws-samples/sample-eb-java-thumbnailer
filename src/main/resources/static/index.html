@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thumbnailer</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f6f7f9; color: #1a1d21;
+         font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 40px 20px 64px; }
+  h1 { font-size: 28px; margin: 0 0 6px; }
+  .sub { color: #5b6470; margin: 0 0 24px; max-width: 60ch; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: #5b6470; margin: 32px 0 12px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; }
+  .badge { background: #fff; border: 1px solid #e2e5ea; border-radius: 6px; padding: 6px 10px; font-size: 13px; color: #5b6470; }
+  .badge b { font-weight: 600; color: #1a1d21; }
+  .samples { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .sample { padding: 0; font: inherit; text-align: left; cursor: pointer; background: #fff;
+            border: 1px solid #e2e5ea; border-radius: 8px; overflow: hidden; }
+  .sample:hover { border-color: #8b95a3; }
+  .sample img { display: block; width: 100%; height: 116px; object-fit: cover; }
+  .sample span { display: block; padding: 8px 10px; font-size: 13px; color: #5b6470; }
+  .card { background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; padding: 20px; }
+  .meta { font-size: 14px; color: #5b6470; margin: 0 0 18px; }
+  .thumbs { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+  .thumb { margin: 0; }
+  .thumb img { display: block; border: 1px solid #e2e5ea; border-radius: 4px; }
+  .thumb figcaption { font-size: 12px; color: #5b6470; margin-top: 6px; }
+  .error { color: #a8200d; }
+  footer { margin-top: 44px; font-size: 13px; color: #8b95a3; }
+  footer a, footer code { color: #5b6470; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Thumbnailer</h1>
+  <p class="sub">Give it an image and it returns three resized copies. Nothing is stored: every
+    request is handled in memory, so any replica can serve any request.</p>
+
+  <div class="badges" id="badges"></div>
+
+  <h2>Pick a sample</h2>
+  <div class="samples" id="samples"></div>
+
+  <h2>Or upload your own</h2>
+  <input type="file" id="file" accept="image/*">
+
+  <div id="output"></div>
+
+  <footer>
+    <a href="/info">/info</a> &middot; <a href="/health">/health</a> &middot;
+    <code>POST /api/thumbnails</code>
+  </footer>
+</div>
+
+<script>
+const byId = (id) => document.getElementById(id);
+const esc = (value) => String(value).replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+async function loadInfo() {
+  try {
+    const info = await (await fetch('/info')).json();
+    byId('badges').innerHTML = [
+      ['version', info.version],
+      ['served by', info.servedBy],
+      ['region', info.region],
+      ['thumbnails generated', info.thumbnailsGenerated],
+    ].map(([label, value]) => `<span class="badge">${esc(label)} <b>${esc(value)}</b></span>`).join('');
+  } catch (ignored) {
+    // The page is still usable without the badges.
+  }
+}
+
+async function loadSamples() {
+  const samples = await (await fetch('/api/samples')).json();
+  byId('samples').innerHTML = samples.map((sample) => `
+    <button class="sample" data-id="${esc(sample.id)}">
+      <img src="/api/samples/${encodeURIComponent(sample.id)}/preview" alt="${esc(sample.name)}">
+      <span>${esc(sample.name)} &mdash; ${sample.width}&times;${sample.height}</span>
+    </button>`).join('');
+
+  document.querySelectorAll('.sample').forEach((element) => {
+    element.addEventListener('click', () => submit(
+      fetch(`/api/samples/${encodeURIComponent(element.dataset.id)}/thumbnails`, { method: 'POST' })));
+  });
+}
+
+byId('file').addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const body = new FormData();
+  body.append('file', file);
+  submit(fetch('/api/thumbnails', { method: 'POST', body }));
+});
+
+async function submit(request) {
+  byId('output').innerHTML = '<h2>Result</h2><div class="card">Resizing&hellip;</div>';
+  try {
+    const response = await request;
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Request failed');
+    render(data);
+  } catch (error) {
+    byId('output').innerHTML =
+      `<h2>Result</h2><div class="card error">${esc(error.message)}</div>`;
+  }
+  loadInfo();
+}
+
+function render(data) {
+  const thumbs = data.thumbnails.map((thumb) => `
+    <figure class="thumb">
+      <img src="${thumb.dataUri}" width="${thumb.width}" height="${thumb.height}" alt="${esc(thumb.label)}">
+      <figcaption>${esc(thumb.label)} &middot; ${thumb.width}&times;${thumb.height}
+        &middot; ${(thumb.bytes / 1024).toFixed(1)} kB</figcaption>
+    </figure>`).join('');
+
+  byId('output').innerHTML = `<h2>Result</h2>
+    <div class="card">
+      <p class="meta">${esc(data.sourceName)} &middot; ${data.sourceWidth}&times;${data.sourceHeight}
+        &middot; ${(data.sourceBytes / 1024).toFixed(0)} kB in
+        &middot; resized in ${data.elapsedMs} ms
+        &middot; served by <b>${esc(data.servedBy)}</b> running <b>${esc(data.version)}</b></p>
+      <div class="thumbs">${thumbs}</div>
+    </div>`;
+}
+
+loadInfo();
+loadSamples();
+</script>
+</body>
+</html>

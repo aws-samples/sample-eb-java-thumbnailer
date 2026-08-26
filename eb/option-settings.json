@@ -1,0 +1,97 @@
+[
+  {
+    "Namespace": "aws:elasticbeanstalk:eks",
+    "OptionName": "cluster-role",
+    "Value": "CLUSTER_ROLE_ARN"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks",
+    "OptionName": "node-role",
+    "Value": "NODE_ROLE_ARN"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:environment",
+    "OptionName": "observability-role",
+    "Value": "OBSERVABILITY_ROLE_ARN"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:environment",
+    "OptionName": "service-port",
+    "Value": "8080"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:environment",
+    "OptionName": "cpu",
+    "Value": "1"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:environment",
+    "OptionName": "memory",
+    "Value": "1Gi"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:environment",
+    "OptionName": "memory-limit",
+    "Value": "2Gi"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:environment",
+    "OptionName": "env-variables",
+    "Value": "{\"AWS_REGION\": \"__AWS_REGION__\"}"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:environment",
+    "OptionName": "language",
+    "Value": "java"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:environment",
+    "OptionName": "load-balancer-type",
+    "Value": "ALB"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:environment:autoscaling",
+    "OptionName": "min-replica",
+    "Value": "1"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:environment:autoscaling",
+    "OptionName": "max-replica",
+    "Value": "3"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:environment:readiness-probe",
+    "OptionName": "enabled",
+    "Value": "true"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:environment:readiness-probe",
+    "OptionName": "http-path",
+    "Value": "/health"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:environment:readiness-probe",
+    "OptionName": "http-port",
+    "Value": "8080"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:alb",
+    "OptionName": "scheme",
+    "Value": "internet-facing"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:alb",
+    "OptionName": "healthcheck-path",
+    "Value": "/health"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:observability",
+    "OptionName": "logs-backend",
+    "Value": "cloudwatch"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:observability",
+    "OptionName": "metrics-backend",
+    "Value": "cloudwatch"
+  }
+]
