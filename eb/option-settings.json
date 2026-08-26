@@ -60,6 +60,16 @@
     "Value": "3"
   },
   {
+    "Namespace": "aws:elasticbeanstalk:eks:environment:autoscaling:trigger",
+    "OptionName": "cpu-metric-type",
+    "Value": "Utilization"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:eks:environment:autoscaling:trigger",
+    "OptionName": "cpu-value",
+    "Value": "75"
+  },
+  {
     "Namespace": "aws:elasticbeanstalk:eks:environment:readiness-probe",
     "OptionName": "enabled",
     "Value": "true"
