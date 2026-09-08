@@ -17,7 +17,7 @@ the environment from the source you upload.
 | Health checks that mean something | `/health` verifies a JPEG writer exists, so it can genuinely fail |
 | Rolling updates with no downtime | Every response names the version and replica that served it |
 | Load balancing across replicas | `servedBy` changes as you refresh |
-| Autoscaling | `GET /api/load` burns CPU on demand |
+| Autoscaling | `GET /api/load` burns CPU on demand, once you turn it on |
 | Automatic instrumentation | Set the application language to Java; logs, metrics, and traces flow with no code change |
 | Environment properties | `/info` reports the Region, which Beanstalk does *not* inject for you |
 
@@ -27,18 +27,35 @@ the environment from the source you upload.
 |---|---|
 | `GET /` | Picker for the built-in samples, plus an upload field |
 | `GET /health` | Readiness and liveness. 200 when a JPEG writer is available, 503 otherwise |
-| `GET /info` | Version, replica hostname, uptime, bound port, Region, heap, thumbnails generated |
+| `GET /info` | Version, replica hostname, uptime, bound port, Region, heap, thumbnails generated, whether `/api/load` is open |
 | `GET /api/samples` | The built-in sample images |
 | `GET /api/samples/{id}/preview` | A reduced copy of a sample, for the picker |
 | `POST /api/samples/{id}/thumbnails` | Resize a built-in sample |
-| `POST /api/thumbnails` | Resize an uploaded image (multipart field `file`, 5 MB limit) |
-| `GET /api/load?seconds=10` | Saturate the CPU for up to 30 seconds |
+| `POST /api/thumbnails` | Resize an uploaded image (multipart field `file`, 5 MB and 25 MP limits) |
+| `GET /api/load?seconds=10` | Saturate the CPU for up to 30 seconds. 404 unless enabled — see [Trigger autoscaling](#trigger-autoscaling) |
 
 Requests are handled entirely in memory. Nothing is written to disk and nothing is kept between
 requests, so any replica can serve any request and no database is needed.
 
 The sample images are drawn at startup rather than committed here, which keeps this a text-only
 repository with no binary assets and no image licensing to account for.
+
+## This is a sample, not a production service
+
+It exists to make Elastic Beanstalk behaviour visible and to be read. Deployed as documented it is
+reachable from the internet with nothing authenticating in front of it, so read everything it
+serves as public.
+
+- **No authentication and no rate limiting.** Any caller can spend your CPU resizing images.
+  Terminate the environment when you are finished with it.
+- **`GET /api/load` is off unless you ask for it.** It saturates every core on the replica that
+  serves it, which on a public endpoint is a denial-of-service tool rather than a demonstration.
+  Set `LOAD_ENDPOINT_ENABLED=true` to turn it on for a scaling demo, and unset it afterwards.
+  `/info` reports whether it is on.
+- **Uploads are bounded twice**: 5 MB per file, and 25 megapixels per image. The pixel count is
+  read from the image header and checked before anything is decoded, because bytes on the wire do
+  not bound memory — a few megabytes of PNG can describe hundreds of megapixels, and decoding
+  allocates four bytes for every one of them.
 
 ## Run it locally
 
@@ -87,7 +104,8 @@ and packages the application. For Java on `amd64`, use `paketobuildpacks/builder
 2. Choose **Create environment**, then the **Cluster** deployment type.
 3. **Application code**: upload the .zip.
 4. **Service port**: `8080`.
-5. **Environment properties**: add `AWS_REGION` set to your Region.
+5. **Environment properties**: add `AWS_REGION` set to your Region. Add
+   `LOAD_ENDPOINT_ENABLED` set to `true` only if you intend to run the autoscaling demo.
 6. Select the three roles above.
 7. **Health check path**: `/health`.
 8. **Application language**: Java, which turns on automatic instrumentation.
@@ -173,6 +191,14 @@ If a new version fails its health checks, Beanstalk restores the previous one au
 
 ## Trigger autoscaling
 
+`GET /api/load` returns 404 until you enable it. `env-variables` carries the whole property map, so
+pass the Region in the same call or you will remove it:
+
+```bash
+aws elasticbeanstalk update-environment --environment-name thumbnailer-env \
+  --option-settings 'Namespace=aws:elasticbeanstalk:eks:environment,OptionName=env-variables,Value={"AWS_REGION":"us-west-2","LOAD_ENDPOINT_ENABLED":"true"}'
+```
+
 ```bash
 # A few concurrent bursts, enough to push CPU past the threshold.
 for i in 1 2 3 4; do curl -s "https://YOUR-ENDPOINT/api/load?seconds=30" & done; wait
@@ -180,6 +206,13 @@ for i in 1 2 3 4; do curl -s "https://YOUR-ENDPOINT/api/load?seconds=30" & done;
 
 Then watch the replica count. Saturating every core can also make health checks time out, so
 keep the bursts short — a pod that stops answering `/health` gets restarted.
+
+Apply the same option setting without `LOAD_ENDPOINT_ENABLED` to close the endpoint again. Running
+locally, it is an ordinary environment variable:
+
+```bash
+LOAD_ENDPOINT_ENABLED=true java -jar target/thumbnailer-1.0.0.jar
+```
 
 ## What is deliberately absent
 

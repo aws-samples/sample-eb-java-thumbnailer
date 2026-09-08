@@ -3,6 +3,8 @@ package com.example.thumbnailer;
 import org.springframework.stereotype.Service;
 
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -12,6 +14,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -24,6 +28,17 @@ public class ThumbnailService {
     /** Widths to produce, largest first. Heights follow from the source aspect ratio. */
     private static final List<Size> SIZES =
             List.of(new Size("large", 480), new Size("medium", 240), new Size("small", 96));
+
+    /**
+     * Largest source this will decode, in pixels. The 5 MB upload cap does not bound memory: a
+     * few megabytes of PNG can describe hundreds of megapixels, and decoding allocates four bytes
+     * for every one of them. 25 MP is around 100 MB of raster, which fits the heap a small
+     * instance gets. Checked against the image header, before any pixels are read.
+     */
+    private static final long MAX_PIXELS = 25_000_000L;
+
+    /** A single side is capped too: 200_000x100 is inside the pixel budget and useful to nobody. */
+    private static final int MAX_DIMENSION = 10_000;
 
     public record Size(String label, int width) {}
 
@@ -49,12 +64,43 @@ public class ThumbnailService {
                 elapsedMs, thumbnails);
     }
 
+    /**
+     * Decodes an upload, refusing anything whose dimensions would not fit in memory. The size is
+     * taken from the header first: rejecting after {@code ImageIO.read} would mean the allocation
+     * has already happened, which is the thing being guarded against.
+     */
     public BufferedImage read(byte[] imageBytes) throws IOException {
-        BufferedImage image = ImageIO.read(new ByteArrayInputStream(imageBytes));
-        if (image == null) {
+        try (ImageInputStream stream =
+                     ImageIO.createImageInputStream(new ByteArrayInputStream(imageBytes))) {
+            ImageReader reader = readerFor(stream);
+            try {
+                reader.setInput(stream);
+                requireSizeWithinLimits(reader.getWidth(0), reader.getHeight(0));
+                return reader.read(0);
+            } finally {
+                reader.dispose();
+            }
+        }
+    }
+
+    private static ImageReader readerFor(ImageInputStream stream) throws IOException {
+        Iterator<ImageReader> readers =
+                stream == null ? Collections.emptyIterator() : ImageIO.getImageReaders(stream);
+        if (!readers.hasNext()) {
             throw new IOException("That file could not be read as an image. Try a JPEG, PNG or GIF.");
         }
-        return image;
+        return readers.next();
+    }
+
+    private static void requireSizeWithinLimits(int width, int height) throws IOException {
+        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+            throw new IOException("That image is %dx%d. Neither side may be over %d pixels."
+                    .formatted(width, height, MAX_DIMENSION));
+        }
+        if ((long) width * height > MAX_PIXELS) {
+            throw new IOException("That image is %dx%d, over the %d megapixel limit."
+                    .formatted(width, height, MAX_PIXELS / 1_000_000));
+        }
     }
 
     public byte[] toJpeg(BufferedImage image) throws IOException {

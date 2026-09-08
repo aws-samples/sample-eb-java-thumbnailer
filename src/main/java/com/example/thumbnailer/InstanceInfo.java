@@ -22,12 +22,15 @@ import java.util.concurrent.atomic.AtomicLong;
 public class InstanceInfo {
 
     private final String version;
+    private final boolean loadEndpointEnabled;
     private final String hostname = resolveHostname();
     private final Instant startedAt = Instant.now();
     private final AtomicLong thumbnailsGenerated = new AtomicLong();
 
-    InstanceInfo(@Value("${app.version:dev}") String version) {
+    InstanceInfo(@Value("${app.version:dev}") String version,
+                 @Value("${thumbnailer.load-endpoint.enabled:false}") boolean loadEndpointEnabled) {
         this.version = version;
+        this.loadEndpointEnabled = loadEndpointEnabled;
     }
 
     public String version() {
@@ -54,6 +57,8 @@ public class InstanceInfo {
         info.put("port", System.getenv().getOrDefault("PORT", "8080"));
         info.put("region", resolveRegion());
         info.put("thumbnailsGenerated", thumbnailsGenerated.get());
+        // So you can tell whether the load generator is exposed without having to probe for it.
+        info.put("loadEndpointEnabled", loadEndpointEnabled);
         info.put("processors", runtime.availableProcessors());
         info.put("heapUsedMb", (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024));
         info.put("heapMaxMb", runtime.maxMemory() / (1024 * 1024));

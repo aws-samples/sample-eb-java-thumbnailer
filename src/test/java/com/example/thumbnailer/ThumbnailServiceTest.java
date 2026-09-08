@@ -6,7 +6,10 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.zip.CRC32;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -64,6 +67,61 @@ class ThumbnailServiceTest {
         byte[] notAnImage = "this is not an image".getBytes();
 
         assertThrows(IOException.class, () -> service.read(notAnImage));
+    }
+
+    @Test
+    void rejectsMorePixelsThanWouldFitInMemory() {
+        // 36 megapixels: a small file, and around 144 MB once decoded.
+        IOException thrown = assertThrows(IOException.class, () -> service.read(pngHeader(6000, 6000)));
+
+        assertTrue(thrown.getMessage().contains("megapixel"),
+                "should be refused for its pixel count, not for being unreadable: "
+                        + thrown.getMessage());
+    }
+
+    @Test
+    void rejectsASideLongerThanTheLimit() {
+        // Only 2 megapixels, so the pixel budget alone would let this through.
+        IOException thrown = assertThrows(IOException.class, () -> service.read(pngHeader(200_000, 10)));
+
+        assertTrue(thrown.getMessage().contains("side"),
+                "should be refused for its width: " + thrown.getMessage());
+    }
+
+    @Test
+    void acceptsAnImageInsideTheLimits() throws IOException {
+        BufferedImage read = service.read(service.toJpeg(image(1600, 1200)));
+
+        assertEquals(1600, read.getWidth());
+        assertEquals(1200, read.getHeight());
+    }
+
+    /**
+     * A PNG carrying only its header. The size guard reads the dimensions from IHDR and refuses
+     * the image before any pixel data is needed, so a test can claim a size that would be absurd
+     * to allocate — and these bytes only decode if the guard fails to fire.
+     */
+    private static byte[] pngHeader(int width, int height) {
+        byte[] chunk = ByteBuffer.allocate(17)
+                .put("IHDR".getBytes(StandardCharsets.US_ASCII))
+                .putInt(width)
+                .putInt(height)
+                .put((byte) 8)  // bit depth
+                .put((byte) 2)  // colour type: truecolour
+                .put((byte) 0)  // compression
+                .put((byte) 0)  // filter
+                .put((byte) 0)  // interlace
+                .array();
+
+        CRC32 crc = new CRC32();
+        crc.update(chunk);
+
+        return ByteBuffer.allocate(8 + 4 + chunk.length + 4)
+                .put(new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A})
+                .putInt(chunk.length - "IHDR".length())  // the length counts the data, not the type
+                .put(chunk)
+                .putInt((int) crc.getValue())
+                .array();
     }
 
     private BufferedImage image(int width, int height) {
