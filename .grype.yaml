@@ -1,0 +1,18 @@
+# Grype configuration for this sample.
+#
+# GHSA-36p3-wjmg-h94x (CVE-2022-22965, "Spring4Shell") is reported against
+# spring-boot-starter-web only because this repository holds source, not a build. The version of
+# that starter is managed by the spring-boot-starter-parent in pom.xml rather than written next to
+# the dependency, so a source scan reads an empty version and matches every range.
+#
+# The build resolves spring-boot-starter-web 3.5.3 and spring-beans 6.2.8. The advisory is fixed in
+# Spring Boot 2.6.6 and Spring Framework 5.3.18, and it only ever applied to a WAR deployed on
+# Tomcat; this application ships as an executable JAR. Neither the version nor the packaging is
+# affected.
+#
+# Scan the built artifact (`mvn package && grype target/thumbnailer-1.0.0.jar`) to get concrete
+# versions and real findings; this rule only suppresses the source-scan false positive.
+ignore:
+  - vulnerability: GHSA-36p3-wjmg-h94x
+    package:
+      name: spring-boot-starter-web
