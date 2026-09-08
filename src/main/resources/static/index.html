@@ -57,18 +57,34 @@
 
 <script>
 const byId = (id) => document.getElementById(id);
-const esc = (value) => String(value).replace(/[&<>"']/g, (c) =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/**
+ * Builds an element from properties and children. Nothing here assigns HTML: strings become text
+ * nodes, so a filename or a server field can never be parsed as markup.
+ */
+function el(tag, props = {}, children = []) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children);
+  return node;
+}
+
+const resultCard = (className, children) =>
+  [el('h2', { textContent: 'Result' }), el('div', { className }, children)];
+
+// Thumbnails come back as data URIs. Refuse any other scheme rather than hand the browser a URL
+// it would fetch or evaluate.
+const imageSrc = (value) => (String(value).startsWith('data:image/') ? value : '');
 
 async function loadInfo() {
   try {
     const info = await (await fetch('/info')).json();
-    byId('badges').innerHTML = [
+    byId('badges').replaceChildren(...[
       ['version', info.version],
       ['served by', info.servedBy],
       ['region', info.region],
       ['thumbnails generated', info.thumbnailsGenerated],
-    ].map(([label, value]) => `<span class="badge">${esc(label)} <b>${esc(value)}</b></span>`).join('');
+    ].map(([label, value]) => el('span', { className: 'badge' },
+      [`${label} `, el('b', { textContent: value })])));
   } catch (ignored) {
     // The page is still usable without the badges.
   }
@@ -76,16 +92,15 @@ async function loadInfo() {
 
 async function loadSamples() {
   const samples = await (await fetch('/api/samples')).json();
-  byId('samples').innerHTML = samples.map((sample) => `
-    <button class="sample" data-id="${esc(sample.id)}">
-      <img src="/api/samples/${encodeURIComponent(sample.id)}/preview" alt="${esc(sample.name)}">
-      <span>${esc(sample.name)} &mdash; ${sample.width}&times;${sample.height}</span>
-    </button>`).join('');
-
-  document.querySelectorAll('.sample').forEach((element) => {
-    element.addEventListener('click', () => submit(
-      fetch(`/api/samples/${encodeURIComponent(element.dataset.id)}/thumbnails`, { method: 'POST' })));
-  });
+  byId('samples').replaceChildren(...samples.map((sample) => {
+    const button = el('button', { className: 'sample' }, [
+      el('img', { src: `/api/samples/${encodeURIComponent(sample.id)}/preview`, alt: sample.name }),
+      el('span', { textContent: `${sample.name} — ${sample.width}×${sample.height}` }),
+    ]);
+    button.addEventListener('click', () => submit(
+      fetch(`/api/samples/${encodeURIComponent(sample.id)}/thumbnails`, { method: 'POST' })));
+    return button;
+  }));
 }
 
 byId('file').addEventListener('change', (event) => {
@@ -97,35 +112,37 @@ byId('file').addEventListener('change', (event) => {
 });
 
 async function submit(request) {
-  byId('output').innerHTML = '<h2>Result</h2><div class="card">Resizing&hellip;</div>';
+  byId('output').replaceChildren(...resultCard('card', ['Resizing…']));
   try {
     const response = await request;
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Request failed');
     render(data);
   } catch (error) {
-    byId('output').innerHTML =
-      `<h2>Result</h2><div class="card error">${esc(error.message)}</div>`;
+    byId('output').replaceChildren(...resultCard('card error', [error.message]));
   }
   loadInfo();
 }
 
 function render(data) {
-  const thumbs = data.thumbnails.map((thumb) => `
-    <figure class="thumb">
-      <img src="${thumb.dataUri}" width="${thumb.width}" height="${thumb.height}" alt="${esc(thumb.label)}">
-      <figcaption>${esc(thumb.label)} &middot; ${thumb.width}&times;${thumb.height}
-        &middot; ${(thumb.bytes / 1024).toFixed(1)} kB</figcaption>
-    </figure>`).join('');
+  const thumbs = data.thumbnails.map((thumb) => el('figure', { className: 'thumb' }, [
+    el('img', { src: imageSrc(thumb.dataUri), width: thumb.width, height: thumb.height,
+                alt: thumb.label }),
+    el('figcaption', { textContent: `${thumb.label} · ${thumb.width}×${thumb.height}`
+                                    + ` · ${(thumb.bytes / 1024).toFixed(1)} kB` }),
+  ]));
 
-  byId('output').innerHTML = `<h2>Result</h2>
-    <div class="card">
-      <p class="meta">${esc(data.sourceName)} &middot; ${data.sourceWidth}&times;${data.sourceHeight}
-        &middot; ${(data.sourceBytes / 1024).toFixed(0)} kB in
-        &middot; resized in ${data.elapsedMs} ms
-        &middot; served by <b>${esc(data.servedBy)}</b> running <b>${esc(data.version)}</b></p>
-      <div class="thumbs">${thumbs}</div>
-    </div>`;
+  const meta = el('p', { className: 'meta' }, [
+    `${data.sourceName} · ${data.sourceWidth}×${data.sourceHeight}`,
+    ` · ${(data.sourceBytes / 1024).toFixed(0)} kB in`,
+    ` · resized in ${data.elapsedMs} ms · served by `,
+    el('b', { textContent: data.servedBy }),
+    ' running ',
+    el('b', { textContent: data.version }),
+  ]);
+
+  byId('output').replaceChildren(
+    ...resultCard('card', [meta, el('div', { className: 'thumbs' }, thumbs)]));
 }
 
 loadInfo();
