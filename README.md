@@ -218,8 +218,6 @@ LOAD_ENDPOINT_ENABLED=true java -jar target/thumbnailer-1.0.0.jar
 
 - **No Dockerfile.** Beanstalk builds the image.
 - **No manifests or infrastructure code.** Beanstalk creates the environment.
-- **No database.** The app is stateless, so it behaves correctly across several replicas.
-- **No AWS SDK calls on the default path**, so no application role is needed to run it.
 
 ## Clean up
 
