@@ -230,6 +230,11 @@ aws elasticbeanstalk terminate-environment --environment-name thumbnailer-env
 Shared infrastructure is removed automatically once no environment is using it. Delete any IAM
 roles you created only for this sample.
 
+## Security
+
+See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for how to report a vulnerability.
+Please do not open a public issue for one.
+
 ## License
 
 MIT-0. See [LICENSE](LICENSE).
