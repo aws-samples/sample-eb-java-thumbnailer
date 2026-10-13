@@ -130,11 +130,11 @@ aws elasticbeanstalk create-application --application-name thumbnailer
 
 cat > build-configuration.json <<EOF
 {
-  "CodeBuildServiceRole": "$BUILD_ROLE",
-  "ComputeType": "BUILD_GENERAL1_MEDIUM",
-  "TimeoutInMinutes": 30,
-  "ImageBuildConfiguration": {
+  "Build": {
     "Type": "buildpack",
+    "CodeBuildServiceRole": "$BUILD_ROLE",
+    "ComputeType": "BUILD_GENERAL1_MEDIUM",
+    "TimeoutInMinutes": 30,
     "Buildpack": "paketobuildpacks/builder-jammy-base"
   }
 }
